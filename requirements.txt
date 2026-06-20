@@ -1,0 +1,16 @@
+﻿python-dotenv
+google-genai
+mss
+Pillow
+pygetwindow
+SpeechRecognition
+sounddevice
+scipy
+edge-tts
+playsound
+pyautogui
+pyperclip
+opencv-python
+mediapipe
+send2trash
+numpy

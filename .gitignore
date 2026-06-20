@@ -1,0 +1,6 @@
+memory.json
+.env
+system_prompt.txt
+_pycache_
+voice.wav
+images
