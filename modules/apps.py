@@ -1,77 +1,147 @@
 import os
 import webbrowser
 from modules.voice import speak
+import time
+
+LOCAL = os.getenv("LOCALAPPDATA")
+PROGRAMFILES = os.getenv("PROGRAMFILES")
+PROGRAMFILESX86 = os.getenv("PROGRAMFILES(X86)")
+
 
 apps = {
 
-    # Coding / Dev
-    "vscode": r"C:\Users\ADMIN\AppData\Local\Programs\Microsoft VS Code\Code.exe",
-    "vs code": r"C:\Users\ADMIN\AppData\Local\Programs\Microsoft VS Code\Code.exe",
-    "pycharm": r"C:\Program Files\JetBrains\PyCharm Community Edition 2023.2.2\bin\pycharm64.exe",
-    "arduino": r"C:\Program Files (x86)\Arduino\arduino.exe",
-    "CapCut": r"C:\Users\ADMIN\AppData\Local\CapCut\Apps\CapCut.exe",
-    "Cap Cut": r"C:\Users\ADMIN\AppData\Local\CapCut\Apps\CapCut.exe",
+    "vscode":{
 
-    # Communication
-    "discord": r"C:\Users\Adrish\AppData\Local\Discord\app-1.0.9001\Discord.exe",
+        "aliases":[
+            "vscode",
+            "vs code",
+            "visual studio code"
+        ],
 
+        "paths":[
+            os.path.join(
+                LOCAL,
+                "Programs",
+                "Microsoft VS Code",
+                "Code.exe"
+            )
+        ],
 
-    # Browsers / Research
-    "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    "youtube": "https://youtube.com",
-    "chat gpt": "https://chatgpt.com",
-    "chatgpt": "https://chatgpt.com",
-    "github": "https://github.com",
-    "gitlab": "https://gitlab.com",
-    "google": "https://google.com",
+        "exe":"Code.exe"
 
-    # Entertainment
-    "netflix": "https://netflix.com",
-    "prime video": "https://primevideo.com",
-    "spotify": "Spotify.exe",
+    },
 
-    # Productivity / Notes
-    "notion": r"C:\Users\Adrish\AppData\Local\Programs\Notion\Notion.exe",
-    "obsidian": r"C:\Users\Adrish\AppData\Local\Programs\Obsidian\Obsidian.exe",
-    "excel": r"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE",
-    "word": r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE",
+    "chrome":{
 
-    # Utilities
-    "calculator": r"C:\Windows\System32\calc.exe",
-    "file explorer": r"C:\Windows\explorer.exe",
-    "snipping tool": r"C:\Windows\System32\SnippingTool.exe",
-    "paint": r"C:\Windows\System32\mspaint.exe"
+        "aliases":[
+            "chrome",
+            "google chrome"
+        ],
+
+        "paths":[
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+        ],
+
+        "exe":"chrome.exe"
+
+    },
+
+    "calculator":{
+
+        "aliases":[
+            "calculator",
+            "calc"
+        ],
+
+        "command":"calc.exe"
+
+    },
+
+    "youtube":{
+
+        "aliases":[
+            "youtube"
+        ],
+
+        "url":"https://youtube.com"
+
+    },
+
+    "github":{
+
+        "aliases":[
+            "github"
+        ],
+
+        "url":"https://github.com"
+
+    },
+
+    "spotify":{
+
+        "aliases":[
+            "spotify"
+        ],
+
+        "exe":"Spotify.exe"
+
+    }
+
 }
 
 
-def open_app(app_name):
+import os
+import shutil
+import subprocess
+import webbrowser
+import pyautogui
+import time
 
-    if app_name in apps:
+def open_app(name):
 
-        target = apps[app_name]
+    app = apps.get(name)
 
-        speak(f"Opening {app_name}")
-
-        try:
-
-            if target.startswith("http"):
-
-                webbrowser.open(target)
-
-            elif "whatsapp" in target:
-              
-                os.system("start whatsapp:")
-
-            else:
-
-                os.startfile(target)
-
-        except Exception as e:
-
-            print("OPEN ERROR:", e)
-
-            speak("Failed to open application.")
-
-    else:
-
+    if not app:
         speak("Application not found.")
+        return
+
+    speak(f"Opening {name}")
+
+    # Website
+    if "url" in app:
+        webbrowser.open(app["url"])
+        return
+
+    # Windows command
+    if "command" in app:
+        subprocess.Popen(app["command"], shell=True)
+        return
+
+    # Known install paths
+    for path in app.get("paths", []):
+
+        if os.path.exists(path):
+
+            subprocess.Popen(path)
+
+            return
+
+    # Search PATH
+    exe = shutil.which(app.get("exe", ""))
+
+    if exe:
+
+        subprocess.Popen(exe)
+
+        return
+
+    # Windows Search fallback
+    pyautogui.press("win")
+    time.sleep(.4)
+
+    pyautogui.write(name)
+
+    time.sleep(.5)
+
+    pyautogui.press("enter")

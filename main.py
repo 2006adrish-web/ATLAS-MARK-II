@@ -11,6 +11,7 @@ from modules.apps import open_app, apps
 from modules.ai import ask_ai
 from modules.visions import capture_screen
 from modules.memory import init_db
+from modules.image_gen import generate_image
 from modules.memory import (
     add_memory,
     get_recent_memories
@@ -121,27 +122,32 @@ def remove_polite_words(command):
     return normalize_command(cleaned)
 
 
-def find_app_in_command(command):
+def find_app_in_command(command: str):
 
-    cleaned = remove_polite_words(command)
+    command = normalize_command(remove_polite_words(command))
 
-    for app_name in sorted(apps, key=len, reverse=True):
+    # Remove opening words
+    for word in OPEN_INTENT_WORDS:
+        if command.startswith(word):
+            command = command[len(word):].strip()
+            break
 
-        if app_name in cleaned:
+    best_match = None
+    longest = 0
 
-            return app_name
+    for app_name, data in apps.items():
 
-    for intent_word in OPEN_INTENT_WORDS:
+        aliases = data.get("aliases", [app_name])
 
-        if cleaned.startswith(intent_word):
+        for alias in aliases:
 
-            possible_app = cleaned.replace(intent_word, "", 1).strip()
+            if alias in command:
 
-            if possible_app:
+                if len(alias) > longest:
+                    longest = len(alias)
+                    best_match = app_name
 
-                return possible_app
-
-    return ""
+    return best_match
 
 
 def is_open_intent(command):
@@ -183,6 +189,186 @@ def handle_command(command):
         clear()
 
         return True, ""
+    # ---------------- FILE COMMANDS ----------------
+    
+    if command.startswith("read file "):
+    
+        path = command.replace(
+            "read file ",
+            "",
+            1
+        ).strip()
+    
+        result = file_controller({
+            "action": "read",
+            "path": path
+        })
+    
+        speak("Reading file.")
+    
+        return True, result
+    
+    
+    if command.startswith("list files"):
+    
+        path = "desktop"
+    
+        if " in " in command:
+            path = command.split(
+                " in ",
+                1
+            )[1]
+    
+        result = file_controller({
+            "action": "list",
+            "path": path
+        })
+    
+        return True, result
+    
+    
+    if command.startswith("find file "):
+    
+        keyword = command.replace(
+            "find file ",
+            "",
+            1
+        ).strip()
+    
+        result = file_controller({
+            "action": "find",
+            "path": "home",
+            "keyword": keyword
+        })
+    
+        return True, result
+    
+    if command.startswith("remember this file "):
+
+        path = command.replace(
+            "remember this file ",
+            ""
+        )
+    
+        content = file_controller({
+            "action": "read",
+            "path": path
+        })
+    
+        add_memory(
+            f"File {path}: {content[:1000]}"
+        )
+    
+        return True, "File stored in memory."
+    if command.startswith("delete file "):
+    
+        path = command.replace(
+            "delete file ",
+            "",
+            1
+        ).strip()
+    
+        result = file_controller({
+            "action": "delete",
+            "path": path
+        })
+    
+        speak(result)
+    
+        return True, result
+    
+    
+    if command.startswith("rename file "):
+    
+        try:
+    
+            data = command.replace(
+                "rename file ",
+                ""
+            )
+    
+            old_name, new_name = data.split(
+                " to "
+            )
+    
+            result = file_controller({
+                "action": "rename",
+                "path": old_name.strip(),
+                "new_name": new_name.strip()
+            })
+    
+            return True, result
+    
+        except:
+    
+            return True, "Use: rename file old.txt to new.txt"
+    
+    
+    if command.startswith("copy file "):
+    
+        try:
+    
+            data = command.replace(
+                "copy file ",
+                ""
+            )
+    
+            src, dst = data.split(
+                " to "
+            )
+    
+            result = file_controller({
+                "action": "copy",
+                "source": src.strip(),
+                "destination": dst.strip()
+            })
+    
+            return True, result
+    
+        except:
+    
+            return True, "Use: copy file source to destination"
+    
+    
+    if command.startswith("move file "):
+    
+        try:
+    
+            data = command.replace(
+                "move file ",
+                ""
+            )
+    
+            src, dst = data.split(
+                " to "
+            )
+    
+            result = file_controller({
+                "action": "move",
+                "source": src.strip(),
+                "destination": dst.strip()
+            })
+    
+            return True, result
+    
+        except:
+    
+            return True, "Use: move file source to destination"
+    
+    
+    if command.startswith("file info "):
+    
+        path = command.replace(
+            "file info ",
+            ""
+        ).strip()
+    
+        result = file_controller({
+            "action": "info",
+            "path": path
+        })
+    
+        return True, result
     if command.startswith("search"):
         
         parts = command.replace("search ", "", 1).split(" for ", 1)
@@ -202,7 +388,27 @@ def handle_command(command):
         return True, result
 
 
+    if command.startswith("generate image "):
     
+        prompt = command.replace(
+            "generate image ",
+            "",
+            1
+        )
+    
+        speak(
+            "Generating image."
+        )
+    
+        image_path = generate_image(
+            prompt
+        )
+    
+        os.startfile(
+            image_path
+        )
+    
+        return True, f"Image created: {image_path}"
     if command.startswith("message "):
         from modules.whatsapp import send_whatsapp_message
         try:
@@ -235,13 +441,14 @@ def handle_command(command):
     
         result = file_controller({
             "action": "create_folder",
-            "path": r"D:\Adrish\Projects",
+            "path": "projects",
             "name": folder_name
         })
     
         speak(result)
     
         return True, result
+    
     if "camera control" in command:
         threading.Thread(
             target=start,
@@ -255,7 +462,7 @@ def handle_command(command):
     
         result = file_controller({
             "action": "create_file",
-            "path": r"D:\Adrish\Projects",
+            "path": "projects",
             "name": file_name
         })
     
