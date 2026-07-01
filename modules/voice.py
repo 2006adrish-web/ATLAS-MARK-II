@@ -43,12 +43,6 @@ def listen():
 
         return command.lower()
 
-    except sr.UnknownValueError:
-
-        speak("I could not understand you.")
-
-        return ""
-
     except sr.RequestError:
 
         speak("Speech recognition service failed.")

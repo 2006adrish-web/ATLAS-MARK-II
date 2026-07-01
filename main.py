@@ -4,7 +4,7 @@ import random
 import threading
 import time
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, messagebox
 from dotenv import load_dotenv
 from modules.voice import speak, listen
 from modules.apps import open_app, apps
@@ -148,6 +148,9 @@ def find_app_in_command(command: str):
                     best_match = app_name
 
     return best_match
+
+
+                 
 
 
 def is_open_intent(command):
@@ -512,6 +515,7 @@ class AtlasHUD:
         self.running = True
         self.listening = False
         self.processing = False
+        self.camera_on = True
         self.angle = 0
         self.wave_phase = 0
         self.scan_y = 0
@@ -645,6 +649,32 @@ class AtlasHUD:
         )
         self.voice_button.pack(side="left", fill="x", expand=True, ipady=10)
 
+        self.mute_button = tk.Button(
+            controls,
+            text="UNMUTE",
+            command=self.toggle_continuous_listen,
+            bg="#264446",
+            fg=HUD_TEXT,
+            activebackground="#2f6a67",
+            activeforeground="white",
+            relief="flat",
+            font=("Segoe UI", 10, "bold")
+        )
+        self.mute_button.pack(side="left", fill="x", expand=True, padx=(8, 0), ipady=10)
+
+        self.cam_button = tk.Button(
+            controls,
+            text="CAM ON",
+            command=self.toggle_camera,
+            bg="#2b3b2f",
+            fg=HUD_TEXT,
+            activebackground="#39513f",
+            activeforeground="white",
+            relief="flat",
+            font=("Segoe UI", 10, "bold")
+        )
+        self.cam_button.pack(side="left", fill="x", expand=True, padx=(8, 0), ipady=10)
+
         self.shutdown_button = tk.Button(
             controls,
             text="SHUTDOWN",
@@ -737,6 +767,112 @@ class AtlasHUD:
 
         self.run_background(worker)
 
+    def toggle_continuous_listen(self):
+
+        # Toggle continuous listening (unmuted = listening)
+        if getattr(self, "continuous_listen", False):
+            self.stop_continuous_listen()
+        else:
+            self.start_continuous_listen()
+
+    def start_continuous_listen(self):
+
+        if getattr(self, "continuous_listen", False):
+            return
+
+        self.continuous_listen = True
+        self.mute_button.configure(text="MUTE")
+        self.log_line("VOICE: Continuous listening enabled.")
+
+        def loop():
+            while getattr(self, "continuous_listen", False) and self.running:
+                # wait until any current processing completes
+                while getattr(self, "processing", False) and self.running:
+                    time.sleep(0.1)
+
+                # set UI to listening just before capturing audio
+                try:
+                    self.root.after(0, lambda: self.set_status("VOICE", "LISTENING"))
+                except Exception:
+                    pass
+
+                try:
+                    command = listen()
+                except Exception:
+                    command = ""
+
+                # if we got a command, execute it and wait until processing finishes
+                if command:
+                    try:
+                        # show transcription in entry and log
+                        self.root.after(0, lambda c=command: self.command_entry.delete(0, "end") or self.command_entry.insert(0, c))
+                        self.log_line(f"VOICE (transcript): {command}")
+
+                        # trigger execution (this sets processing=True)
+                        self.root.after(0, lambda c=command: self.execute_command(c))
+
+                        # wait until processing completes (including speaking)
+                        while getattr(self, "processing", False) and self.running:
+                            time.sleep(0.1)
+
+                    except Exception:
+                        pass
+
+                # small delay before next listen cycle
+                time.sleep(0.15)
+
+        threading.Thread(target=loop, daemon=True).start()
+
+    def stop_continuous_listen(self):
+
+        if not getattr(self, "continuous_listen", False):
+            return
+
+        self.continuous_listen = False
+        self.mute_button.configure(text="UNMUTE")
+        self.set_status("VOICE", "STANDBY")
+        self.log_line("VOICE: Continuous listening disabled.")
+
+    def toggle_camera(self):
+
+        if getattr(self, "camera_on", False):
+            # confirm before disabling
+            try:
+                if not messagebox.askyesno("Confirm", "Disable camera vision?"):
+                    return
+            except Exception:
+                pass
+
+            try:
+                face_monitor.stop()
+            except Exception:
+                pass
+
+            self.camera_on = False
+            self.cam_button.configure(text="CAM OFF")
+            self.set_status("EYE LINK", "OFFLINE")
+            try:
+                speak("Camera vision disabled")
+            except Exception:
+                pass
+            self.log_line("VISION: Camera disabled by user.")
+
+        else:
+            # enable camera monitor in background
+            try:
+                threading.Thread(target=face_monitor.start, daemon=True).start()
+            except Exception:
+                pass
+
+            self.camera_on = True
+            self.cam_button.configure(text="CAM ON")
+            self.set_status("EYE LINK", "CALIBRATED")
+            try:
+                speak("Camera vision enabled")
+            except Exception:
+                pass
+            self.log_line("VISION: Camera enabled by user.")
+
     def finish_voice(self, command):
 
         self.listening = False
@@ -779,7 +915,12 @@ class AtlasHUD:
 
     def shutdown(self):
 
+        # stop background listeners before shutdown
         self.running = False
+        try:
+            self.continuous_listen = False
+        except Exception:
+            pass
         self.root.destroy()
 
     def animate(self):
